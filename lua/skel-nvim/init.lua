@@ -12,13 +12,13 @@ local apply_skel_for_empty_file = true
 -- this extended/overriden by user config
 local default_config = {
   -- enable/disable plugin, this supercedes disable_for_empty_file
-  skel_enabled = true,
+  skel_enabled              = true,
   -- enable/disable processing for bufread + empty file
   apply_skel_for_empty_file = true,
   -- dir containing skeleton files
-  templates_dir = config_path .. "/skeleton",
+  templates_dir             = config_path .. "/skeleton",
   -- file pattern -> template mapping
-  mappings = {
+  mappings                  = {
     ['main.cpp'] = "main.cpp.skel",
     ['*.h'] = "h.skel",
     ['*.cpp'] = "cpp.skel",
@@ -32,25 +32,26 @@ local default_config = {
   },
   -- substitutions in templates
   -- can be a string or a callback function
-  substitutions = {
-    ['FILENAME']             = skeld.get_filename,
-    ['NAME']                 = skeld.get_author,
-    ['DATE']                 = skeld.get_date,
-    ['CPP_HDR_GUARD']        = skeld.get_cppheaderguard,
-    ['CPP_TEST_HDR_GUARD']   = skeld.get_testheaderguard,
-    ['CPP_HDR_INCLUDE']      = skeld.get_headerinclude,
-    ['CLASS_NAME']           = skeld.get_classname2,
-    ['NAMESPACE_OPEN']       = skeld.get_namespaceopen,
-    ['NAMESPACE_CLOSE']      = skeld.get_namespaceclose,
+  substitutions             = {
+    ['FILENAME']           = skeld.get_filename,
+    ['NAME']               = skeld.get_author,
+    ['DATE']               = skeld.get_date,
+    ['CPP_HDR_GUARD']      = skeld.get_cppheaderguard,
+    ['CPP_TEST_HDR_GUARD'] = skeld.get_testheaderguard,
+    ['CPP_HDR_INCLUDE']    = skeld.get_headerinclude,
+    ['CLASS_NAME']         = skeld.get_classname2,
+    ['NAMESPACE_OPEN']     = skeld.get_namespaceopen,
+    ['NAMESPACE_CLOSE']    = skeld.get_namespaceclose,
+    ['CURSOR']             = skeld.get_cursor,
   },
 
   -- Misc config vars available to substitution callback functions
   -- Users can add their own variable here
-  author    = "MyName",
-  namespace =  {"MyOrg", "MyApp"},
+  author                    = "MyName",
+  namespace                 = { "MyOrg", "MyApp" },
 
   -- per project overrides
-  projects = {
+  projects                  = {
   }
 }
 
@@ -76,12 +77,11 @@ local current_config = nil
 
 -- compares filename to pattern see if they match
 local function find_match(filename, pattern)
-
   local fully_matched     = false
   local wildcard_match    = false
   local num_chars_matched = 0
 
-  local max_len = math.max(string.len(filename), string.len(pattern))
+  local max_len           = math.max(string.len(filename), string.len(pattern))
 
   -- match each char from the end until we eithr
   --    find a mismatch
@@ -108,8 +108,7 @@ local function find_match(filename, pattern)
   -- print(filename, pattern, max_len, wildcard_match, num_chars_matched, fully_matched)
 
   -- success: if either wildcard_match or fully_matched
-  return {matched = fully_matched or wildcard_match, full_match = fully_matched, weight = num_chars_matched}
-
+  return { matched = fully_matched or wildcard_match, full_match = fully_matched, weight = num_chars_matched }
 end
 
 -- using current buffer filename attempts to
@@ -144,26 +143,28 @@ local function apply_subs(line, subs, callback_arg)
     local clean_key = string.gsub(str, "@", "")
     local val = subs[clean_key]
     if val then
-      subs_to_apply[clean_key] =  val
+      subs_to_apply[clean_key] = val
     end
   end
 
+  local cursor = false
   for k, v in pairs(subs_to_apply) do
     -- we don't support tables as a substitution value
-    if type(v) ==   "table" then
+    if type(v) == "table" then
       return line
     end
 
     local val = v
-    if type(v) ==  "function" then
+    if type(v) == "function" then
       val = v(callback_arg)
     end
     -- support callback returning multiline
     if type(val) == "table" then return val end
     --
-    line = string.gsub(line, "@"..k.."@", val)
+    line = string.gsub(line, "@" .. k .. "@", val)
+    if k == "CURSOR" then cursor = true end
   end
-  return line
+  return cursor, line
 end
 
 -- identifies which config should apply to current
@@ -173,10 +174,10 @@ local function set_current_config()
   local proj = nil
   local max = 0
 
-  for _,v in pairs(runtime_config) do
+  for _, v in pairs(runtime_config) do
     local s, e = fname:find(v.path)
     local weight = 0
-    if s ~= nil and e ~= nil then weight = e-s end
+    if s ~= nil and e ~= nil then weight = e - s end
     if weight > max then
       proj = v
       max = weight
@@ -190,13 +191,11 @@ local function set_current_config()
     -- print (runtime_config['default'].project)
     return runtime_config['default']
   end
-
 end
 
 -- build the config table that will be passed to
 -- substitution handlers
 local function build_callback_config(config, filename)
-
   local callback = {
     author = config.author,
     filename = filename,
@@ -213,7 +212,6 @@ local function build_callback_config(config, filename)
 end
 
 local function load_template_file(template_file)
-
   local bufnr = vim.api.nvim_get_current_buf()
 
   -- if we've already processed this buffer ignore other patterns that match this file
@@ -225,10 +223,10 @@ local function load_template_file(template_file)
   if abspath == nil or abspath == "" then
     return
   end
-  local config  = M.get_config()
+  local config        = M.get_config()
 
-  local proj_file = config.templates_dir.."/"..template_file
-  local default_file = default_config.templates_dir.."/"..template_file
+  local proj_file     = config.templates_dir .. "/" .. template_file
+  local default_file  = default_config.templates_dir .. "/" .. template_file
 
   local template_path = proj_file
   if not Utils.fileexists(template_path) then
@@ -243,15 +241,18 @@ local function load_template_file(template_file)
   local callback_cfg = build_callback_config(config, abspath)
 
   -- load skeleton file and apply substitutions
+  local cursor = false
+  local cursor_line = 0
   for line in fh:lines() do
-    line = apply_subs(line, config.substitutions, callback_cfg)
+    cursor, line = apply_subs(line, config.substitutions, callback_cfg)
+    if cursor then cursor_line = #lines end
     -- line can be substituted by multilines
     if type(line) == "table" then
-      for _,l in ipairs(line) do
-        lines[#lines +1] = l
+      for _, l in ipairs(line) do
+        lines[#lines + 1] = l
       end
     else
-      lines[#lines+1] = line
+      lines[#lines + 1] = line
     end
   end
   fh:close()
@@ -259,7 +260,7 @@ local function load_template_file(template_file)
   vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
   -- local cmd = "0r "..default_config.templates_dir.."/"..res["template"]
   -- vim.cmd(cmd) print(cmd)
-
+  vim.api.nvim_win_set_cursor(0, cursor_line)
   -- set flag to indicate this buffer has bee processed.
   buffer_state[bufnr] = true
   current_config = nil
@@ -268,7 +269,6 @@ end
 
 -- Main handler for BufNewFile events
 function M.handle_new_file(pattern, skeleton_file, manual)
-
   if not manual and not skel_enabled then return end
 
   local bufnr = vim.api.nvim_get_current_buf()
@@ -312,7 +312,6 @@ end
 -- This is common use case when creating a new file using nvim-tree
 -- and then loading opening/reading the empty buffer
 function M.handle_buff_read(pattern, skeleton_file, manual)
-
   if not manual and not skel_enabled then return end
   if not manual and not apply_skel_for_empty_file then return end
 
@@ -330,16 +329,15 @@ function M.handle_buff_read(pattern, skeleton_file, manual)
   -- if buf
 end
 
-
 -- register pattern with BufNewFile
 local function register_mapping(pattern, skeleton_file)
   vim.api.nvim_create_autocmd({ "BufNewFile" }, {
-    pattern = {pattern},
+    pattern = { pattern },
     callback = function() M.handle_new_file(pattern, skeleton_file, false) end,
     group = skel_autogroup
   })
   vim.api.nvim_create_autocmd({ "BufRead" }, {
-    pattern = {pattern},
+    pattern = { pattern },
     callback = function() M.handle_buff_read(pattern, skeleton_file, false) end,
     group = skel_autogroup
   })
@@ -355,7 +353,6 @@ end
 
 -- setup
 function M.setup(config)
-
   if config then
     default_config = vim.tbl_deep_extend('force', default_config, config)
   end
@@ -376,10 +373,9 @@ function M.setup(config)
   }
 
   for pname, cfg in pairs(default_config.projects) do
+    local path = default_config.templates_dir .. "/" .. pname
 
-    local path = default_config.templates_dir.."/"..pname
-
-    local maps  = default_config.mappings
+    local maps = default_config.mappings
     if cfg['mappings'] ~= nil then
       maps = vim.tbl_deep_extend('force', maps, cfg.mappings)
     end
@@ -443,7 +439,6 @@ function M.setup(config)
 
   skel_enabled = default_config.skel_enabled
   apply_skel_for_empty_file = default_config.apply_skel_for_empty_file
-
 end
 
 -- Commands --
@@ -460,7 +455,7 @@ end
 
 -- SkelStatus
 function M.status()
-  vim.notify("skel status="..tostring(skel_enabled), vim.log.levels.INFO, {})
+  vim.notify("skel status=" .. tostring(skel_enabled), vim.log.levels.INFO, {})
   return skel_enabled
 end
 
@@ -477,7 +472,7 @@ end
 
 -- SkelEdit
 function M.create_file(opts)
-  vim.cmd(":e "..opts.args)
+  vim.cmd(":e " .. opts.args)
   if not skel_enabled then
     M.handle_buff_read("", vim.fn.expand("%:p"), true)
   end
