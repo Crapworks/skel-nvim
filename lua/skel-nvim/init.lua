@@ -245,7 +245,7 @@ local function load_template_file(template_file)
   local cursor_line = 0
   for line in fh:lines() do
     cursor, line = apply_subs(line, config.substitutions, callback_cfg)
-    if cursor then cursor_line = #lines end
+    if cursor then cursor_line = #lines + 1 end
     -- line can be substituted by multilines
     if type(line) == "table" then
       for _, l in ipairs(line) do
