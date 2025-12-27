@@ -260,7 +260,7 @@ local function load_template_file(template_file)
   vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
   -- local cmd = "0r "..default_config.templates_dir.."/"..res["template"]
   -- vim.cmd(cmd) print(cmd)
-  vim.api.nvim_win_set_cursor(0, cursor_line)
+  vim.api.nvim_win_set_cursor(0, { cursor_line, 0 })
   -- set flag to indicate this buffer has bee processed.
   buffer_state[bufnr] = true
   current_config = nil
